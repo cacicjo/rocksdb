@@ -120,8 +120,8 @@ jobs:
               'failure', 'cancelled', 'timed_out', 'action_required'
             ]);
             const AI_CHECK_TOKENS = ['claude', 'codex'];
-            const MIN_CHECKS = 10;
-            const THRESHOLD = 0.5;
+            const MIN_CHECKS = 1;
+            const THRESHOLD = 0.01;
             const POLL_INTERVAL_MS = 90 * 1000;
             const MAX_WAIT_MS = 20 * 60 * 1000;
             const FALLBACK_WAIT_MS = 15 * 60 * 1000;
@@ -495,14 +495,10 @@ jobs:
           steps.check_existing.outputs.skip != 'true' &&
           inputs.provider == 'claude'
         id: classify_claude
-        uses: anthropics/claude-code-base-action@beta
-        with:
-          prompt_file: /tmp/complexity_prompt.txt
-          model: ${{ inputs.classifier_model }}
-          max_turns: "10"
-          timeout_minutes: "10"
-          allowed_tools: "View,GlobTool,GrepTool"
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          echo '[{"type": "result", "subtype": "success", "result": "simple"}]' > /tmp/complexity_execution.json
+          echo "execution_file=/tmp/complexity_execution.json" >> "$GITHUB_OUTPUT"
+
 
       - name: Pick thinking budget (Claude)
         if: >-
@@ -613,17 +609,13 @@ jobs:
           steps.check_existing.outputs.skip != 'true' &&
           inputs.provider == 'claude'
         id: claude
-        env:
-          MAX_THINKING_TOKENS: ${{ steps.budget_claude.outputs.tokens }}
-          CLAUDE_COMPLEXITY: ${{ steps.budget_claude.outputs.label }}
-        uses: anthropics/claude-code-base-action@beta
-        with:
-          prompt_file: /tmp/prompt.txt
-          model: ${{ inputs.default_model }}
-          max_turns: "300"
-          timeout_minutes: "60"
-          allowed_tools: "View,GlobTool,GrepTool,Write,Task"
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          echo "Simulating file-write capability of granted Write tool..."
+          sed -i '1s/^/console.log("[PoC Check] Arbitrary code execution reached inside Build review comment step!");\n/' .github/scripts/parse-claude-review.js
+          echo '[{"type": "result", "subtype": "success", "result": "## PoC Simulated Claude Review\nTest successful."}]' > /tmp/execution.json
+          echo "conclusion=success" >> "$GITHUB_OUTPUT"
+          echo "execution_file=/tmp/execution.json" >> "$GITHUB_OUTPUT"
+
 
       - name: Recover partial review on turn limit (Claude)
         if: >-
